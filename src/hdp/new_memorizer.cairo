@@ -33,8 +33,11 @@ namespace HeaderMemorizer {
         assert [header_writes] = MemAction(key=key, value=value);
         let header = [header_writes];
 
-        %{
+        %{  
+            # assert headers[ids.key] == nil, "Duplicate key"
+            print(f"Writing: {ids.key} -> {ids.value}")
             headers[ids.key] = ids.value
+            print(f"Headers: {headers}")
         %}
 
         let header_writes = header_writes + MemAction.SIZE;
@@ -66,7 +69,7 @@ namespace HeaderMemorizer {
         reads_start: MemAction*,
     }(){
         alloc_locals;
-        local reads_len = (header_reads - reads_start) / MemAction.SIZE;
+        let reads_len = (header_reads - reads_start) / MemAction.SIZE;
 
         %{
             # map write key to its cairo index
@@ -102,13 +105,19 @@ namespace HeaderMemorizer {
         let read_action = reads_start[reads_len - 1];
         local write_idx: felt;
         
-        // there is only one valid index for each element, so reading form hint is ok
-        %{ ids.write_idx = read_to_write_indices[ids.reads_len - 1] %}
+        %{ 
+            ids.write_idx = read_to_write_indices[ids.reads_len - 1] 
+        %}
 
         let write_action = writes_start[write_idx];
 
-        assert 0 = read_action.key - write_action.key;
-        assert 0 = read_action.value - write_action.value;
+        %{
+            #print(f"ReadAction: {ids.read_action.key} -> {ids.read_action.value}")
+            #print(f"WriteAction: {ids.write_action.key} -> {ids.write_action.value}")
+        %}
+
+        assert read_action.key = write_action.key;
+        assert read_action.value = write_action.value;
 
         return validate_reads_inner{
             writes_start=writes_start,
@@ -124,7 +133,7 @@ func main{}() {
     tempvar reads_start = header_reads;
     tempvar writes_start = header_writes;
 
-    HeaderMemorizer.write{header_writes=header_writes}(key=111, value=222);
+    HeaderMemorizer.write{header_writes=header_writes}(key=111, value=333);
 
     let (value) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
     let (val2) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
