@@ -97,18 +97,16 @@ namespace HeaderMemorizer {
     }(read_log: LogItem*, reads_len: felt) {
         alloc_locals;
 
-        local write_key: felt;
-        local write_value: felt;
+        local write_offset: felt;
         %{ 
-            # Is the correct memory segment enforced here? Or could an attacker point us to a different one?
-            ids.write_key = memory[ids.write_log_start.address_ + read_to_write_offset[ids.reads_len - 1]]
-            ids.write_value = memory[ids.write_log_start.address_ + read_to_write_offset[ids.reads_len - 1] + 1]
+            ids.write_offset = read_to_write_offset[ids.reads_len - 1]
         %}
 
         let read_action = cast(read_log, LogItem*);
+        let write_action = cast(write_log_start + write_offset, LogItem*);
 
-        assert read_action.key = write_key;
-        assert read_action.value = write_value;
+        assert read_action.key = write_action.key;
+        assert read_action.value = write_action.value;
 
         // once the last read is validated, we are done
         if (reads_len == 1) {
@@ -162,8 +160,8 @@ func main{}() {
     let (val2) = HeaderMemorizer.read{read_log=read_log}(key=333);
     let (val2) = HeaderMemorizer.read{read_log=read_log}(key=333);
     let (val2) = HeaderMemorizer.read{read_log=read_log}(key=333);
-    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=222);
     let (val2) = HeaderMemorizer.read{read_log=read_log}(key=111);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=222);
 
     HeaderMemorizer.validate_reads{write_log=write_log, write_log_start=write_log_start, read_log=read_log, read_log_start=read_log_start}();
 
