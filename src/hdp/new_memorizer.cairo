@@ -5,47 +5,44 @@ from starkware.cairo.common.builtin_poseidon.poseidon import poseidon_hash_singl
 from starkware.cairo.common.dict import dict_write, dict_read
 from src.hdp.types import Header, AccountState, SlotState
 from starkware.cairo.common.alloc import alloc
-
 from starkware.cairo.common.uint256 import Uint256
 
-
-
-struct MemAction {
+struct LogItem {
     key: felt,
     value: felt,
 }
 
 namespace HeaderMemorizer {
-    func initialize{}() -> (header_reads: MemAction*, header_writes: MemAction*){
-        let (header_writes: MemAction*) = alloc();
-        let (header_reads: MemAction*) = alloc();
+    func initialize{}() -> (read_log: LogItem*, write_log: LogItem*){
+        let (write_log: LogItem*) = alloc();
+        let (read_log: LogItem*) = alloc();
 
         %{
             headers = {}
         %}
 
-        return (header_reads=header_reads, header_writes=header_writes);
+        return (read_log=read_log, write_log=write_log);
     }
 
     func write{
-        header_writes: MemAction*,
+        write_log: LogItem*,
     }(key: felt, value: felt){
-        assert [header_writes] = MemAction(key=key, value=value);
-        let header = [header_writes];
+        assert [write_log] = LogItem(key=key, value=value);
+        let header = [write_log];
 
         %{  
-            # assert headers[ids.key] == nil, "Duplicate key"
+            assert ids.key not in headers, f"Duplicate key! {ids.key} already exists"
             print(f"Writing: {ids.key} -> {ids.value}")
             headers[ids.key] = ids.value
-            print(f"Headers: {headers}")
         %}
 
-        let header_writes = header_writes + MemAction.SIZE;
+        let write_log = write_log + LogItem.SIZE;
         return ();
     }
 
+    // Read from memorizer
     func read{
-        header_reads: MemAction*,
+        read_log: LogItem*,
     }(key: felt) -> (value: felt){
         alloc_locals;
         local value: felt;
@@ -55,98 +52,120 @@ namespace HeaderMemorizer {
             ids.value = value
         %}
 
-        assert [header_reads] = MemAction(key=key, value=value);
-        let header_reads = header_reads + MemAction.SIZE;
+        assert [read_log] = LogItem(key=key, value=value);
+        let read_log = read_log + LogItem.SIZE;
 
         return (value=value);
     }
 
     // ensure that all reads correspond to writes
     func validate_reads{
-        header_writes: MemAction*,
-        writes_start: MemAction*,
-        header_reads: MemAction*,
-        reads_start: MemAction*,
+        write_log: LogItem*,
+        write_log_start: LogItem*,
+        read_log: LogItem*,
+        read_log_start: LogItem*,
     }(){
         alloc_locals;
-        let reads_len = (header_reads - reads_start) / MemAction.SIZE;
+        // compute in cairo, so we cant skip any reads
+        let reads_len = (read_log - read_log_start) / LogItem.SIZE;
 
         %{
             # map write key to its cairo index
-            write_indices = {}
+            write_segment_offsets = {}
             for i in range(len(headers)):
-                write_key = memory[ids.writes_start.address_ + ids.MemAction.SIZE * i]
-                write_indices[write_key] = i
+                write_address = ids.write_log_start.address_ + ids.LogItem.SIZE * i
+                write_key = memory[write_address]
+                write_segment_offsets[write_key] = write_address.offset
             
             # for each read, find the corresponding write index and add to array        
-            read_to_write_indices = []
+            read_to_write_offset = []
             for i in range(ids.reads_len):
-                key = memory[ids.reads_start.address_ + ids.MemAction.SIZE * i]
-                read_to_write_indices.append(write_indices[key])
+                key = memory[ids.read_log_start.address_ + ids.LogItem.SIZE * i]
+                read_to_write_offset.append(write_segment_offsets[key])
+                
         %}
 
         validate_reads_inner{
-            writes_start=writes_start,
-            reads_start=reads_start,
-        }(reads_len=reads_len);
-        
+            write_log_start=write_log_start,
+        }( read_log=read_log-LogItem.SIZE, reads_len=reads_len);
+
         return ();
     }
 
     func validate_reads_inner{
-        writes_start: MemAction*,
-        reads_start: MemAction*,
-    }(reads_len: felt) {
+        write_log_start: LogItem*,
+    }(read_log: LogItem*, reads_len: felt) {
         alloc_locals;
-        if (reads_len == 0) {
+
+        local write_key: felt;
+        local write_value: felt;
+        %{ 
+            # Is the correct memory segment enforced here? Or could an attacker point us to a different one?
+            ids.write_key = memory[ids.write_log_start.address_ + read_to_write_offset[ids.reads_len - 1]]
+            ids.write_value = memory[ids.write_log_start.address_ + read_to_write_offset[ids.reads_len - 1] + 1]
+        %}
+
+        let read_action = cast(read_log, LogItem*);
+
+        assert read_action.key = write_key;
+        assert read_action.value = write_value;
+
+        // once the last read is validated, we are done
+        if (reads_len == 1) {
             return ();
         }
 
-        let read_action = reads_start[reads_len - 1];
-        local write_idx: felt;
-        
-        %{ 
-            ids.write_idx = read_to_write_indices[ids.reads_len - 1] 
-        %}
-
-        let write_action = writes_start[write_idx];
-
-        %{
-            #print(f"ReadAction: {ids.read_action.key} -> {ids.read_action.value}")
-            #print(f"WriteAction: {ids.write_action.key} -> {ids.write_action.value}")
-        %}
-
-        assert read_action.key = write_action.key;
-        assert read_action.value = write_action.value;
-
         return validate_reads_inner{
-            writes_start=writes_start,
-            reads_start=reads_start,
-        }(reads_len=reads_len-1);
+            write_log_start=write_log_start,
+        }(read_log=read_log - LogItem.SIZE, reads_len=reads_len-1);
     }
 }
 
 func main{}() {
     alloc_locals;
 
-    let (header_reads, header_writes) = HeaderMemorizer.initialize{}();
-    tempvar reads_start = header_reads;
-    tempvar writes_start = header_writes;
+    let (read_log, write_log) = HeaderMemorizer.initialize{}();
+    tempvar read_log_start = read_log;
+    tempvar write_log_start = write_log;
 
-    HeaderMemorizer.write{header_writes=header_writes}(key=111, value=333);
+    HeaderMemorizer.write{write_log=write_log}(key=111, value=333);
+    HeaderMemorizer.write{write_log=write_log}(key=222, value=334);
+    HeaderMemorizer.write{write_log=write_log}(key=333, value=335);
 
-    let (value) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
-    let (val2) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
-    let (val2) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
-    let (val2) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
-    let (val2) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
-    let (value) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
-    let (val2) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
-    let (val2) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
-    let (val2) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
-    let (val2) = HeaderMemorizer.read{header_reads=header_reads}(key=111);
+    let (value) = HeaderMemorizer.read{read_log=read_log}(key=111);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=111);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=111);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=111);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=111);
+    let (value) = HeaderMemorizer.read{read_log=read_log}(key=111);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=111);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=111);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=111);
 
-    HeaderMemorizer.validate_reads{header_writes=header_writes, writes_start=writes_start, header_reads=header_reads, reads_start=reads_start}();
+    let (value) = HeaderMemorizer.read{read_log=read_log}(key=222);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=222);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=222);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=222);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=222);
+    let (value) = HeaderMemorizer.read{read_log=read_log}(key=222);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=222);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=222);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=222);
+
+    let (value) = HeaderMemorizer.read{read_log=read_log}(key=333);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=333);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=333);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=333);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=333);
+    let (value) = HeaderMemorizer.read{read_log=read_log}(key=333);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=333);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=333);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=333);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=333);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=222);
+    let (val2) = HeaderMemorizer.read{read_log=read_log}(key=111);
+
+    HeaderMemorizer.validate_reads{write_log=write_log, write_log_start=write_log_start, read_log=read_log, read_log_start=read_log_start}();
 
     return ();
     
