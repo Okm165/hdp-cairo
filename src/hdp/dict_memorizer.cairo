@@ -46,6 +46,8 @@ func main{
     let (header_dict, header_dict_start) = HeaderMemorizer.initialize();
 
     HeaderMemorizer.write{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=111, value=222);
+    HeaderMemorizer.write{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=222, value=222);
+    HeaderMemorizer.write{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=333, value=222);
 
     let (value) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=111);
     let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=111);
@@ -58,11 +60,29 @@ func main{
     let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=111);
     let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=111);
 
-    // HeaderMemorizer.validate_reads{header_writes=header_writes, writes_start=writes_start, header_reads=header_reads, reads_start=reads_start}();
+    let (value) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=222);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=222);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=222);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=222);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=222);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=222);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=222);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=222);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=222);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=222);
+
+    let (value) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=333);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=333);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=333);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=333);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=333);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=333);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=333);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=333);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=333);
+    let (val2) = HeaderMemorizer.read{header_dict=header_dict, poseidon_ptr=poseidon_ptr}(key=333);
 
     default_dict_finalize(header_dict_start, header_dict, MEMORIZER_DEFAULT);
 
-
-    return ();
-    
+    return ();    
 }

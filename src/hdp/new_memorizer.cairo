@@ -102,11 +102,15 @@ namespace HeaderMemorizer {
             ids.write_offset = read_to_write_offset[ids.reads_len - 1]
         %}
 
+        // I would like to remove these 
         let read_action = cast(read_log, LogItem*);
         let write_action = cast(write_log_start + write_offset, LogItem*);
 
         assert read_action.key = write_action.key;
         assert read_action.value = write_action.value;
+
+        // I would like to be able to compare ptr values without casting here    
+        // [[read_log]] = [[write_log_start + write_offset]];
 
         // once the last read is validated, we are done
         if (reads_len == 1) {
