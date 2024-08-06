@@ -20,7 +20,10 @@ jobs:
         with:
           driver: remote
           endpoint: "tcp://buildkit.iosis.tech:30500"
-          driver-opts: cacert=$(pwd)/client-ca.pem,cert=$(pwd)/client-cert.pem,key=$(pwd)/client-key.pem
+          driver-opts: |
+            cacert=${{ github.workspace }}/client-ca.pem
+            cert=${{ github.workspace }}/client-cert.pem
+            key=${{ github.workspace }}/client-key.pem
           cleanup: true
       - name: Build and cache Docker image
         uses: docker/build-push-action@v5
